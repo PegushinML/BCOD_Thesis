@@ -44,10 +44,10 @@ class Detector:
 
             # Evaluate the predictive distribution for the new datum under each of
             # the parameters.  This is the standard thing from Bayesian inference.
-            predprobs = self.studentpdf(data[t], muT, betaT*(kappaT+1)/(alphaT*kappaT), 2 * alphaT);
+            predprobs = self.__studentpdf(data[t], muT, betaT*(kappaT+1)/(alphaT*kappaT), 2 * alphaT);
 
             # Evaluate the hazard function for this interval.
-            H = self.hazard_func(t);
+            H = self.__hazard_func(t);
 
             # Evaluate the growth probabilities - shift the probabilities down and to
             # the right, scaled by the hazard function and the predictive
@@ -74,15 +74,15 @@ class Detector:
             betaT = betaT0
 
             # Store the maximum, to plot later.
-            maxes[t] = self.find_max_indicies(R[:,t])
+            maxes[t] = self.__find_max_indicies(R[:,t])
         return R, maxes
     
-    def studentpdf(self, x, mu, var, nu):
+    def __studentpdf(self, x, mu, var, nu):
         # This form is taken from Kevin Murphy's lecture notes.
         c = np.exp(sp.gammaln(nu/2 + 0.5) - sp.gammaln(nu/2)) * pow((nu*np.pi*var), (-0.5))  
         return (c * pow((1 + (1/(nu*var))*pow((x-mu),2)), (-(nu+1)/2))).transpose()
     
-    def find_max_indicies(self, arr):
+    def __find_max_indicies(self, arr):
         maximum = max(arr)
         indicies = []
         for i in range(0, len(arr)):
@@ -90,5 +90,5 @@ class Detector:
                 indicies.append(i)
         return np.array(indicies)
     
-    def hazard_func(self, r):
+    def __hazard_func(self, r):
         return self.__lambda
