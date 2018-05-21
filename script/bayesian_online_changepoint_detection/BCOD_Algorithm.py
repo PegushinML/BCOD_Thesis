@@ -4,11 +4,13 @@ import scipy.special as sp
 class Detector:
     def __init__(self,
                 hazard_constant=0.0005,
+                lag=0,
                 mu_initial   = 0,
                 kappa_initial = 1,
                 alpha_initial = 1,
                 beta_initial  = 1):
         self.__lambda = hazard_constant
+        self.__lag = lag
         self.__mu0 = mu_initial
         self.__kappa0 = kappa_initial
         self.__alpha0 = alpha_initial
@@ -37,30 +39,31 @@ class Detector:
         betaT  = np.array([self.__beta0])
         
         # Keep track of the maximums.
-        maxes  = np.zeros(len(data)+1);
+        maxes  = np.zeros(len(data)+1)
+        new_run = []
         
         # Loop over the data like we're seeing it all for the first time.
         for t in range(1,len(data) - 1):
 
             # Evaluate the predictive distribution for the new datum under each of
             # the parameters.  This is the standard thing from Bayesian inference.
-            predprobs = self.__studentpdf(data[t], muT, betaT*(kappaT+1)/(alphaT*kappaT), 2 * alphaT);
+            predprobs = self.__studentpdf(data[t], muT, betaT*(kappaT+1)/(alphaT*kappaT), 2 * alphaT)
 
             # Evaluate the hazard function for this interval.
-            H = self.__hazard_func(t);
+            H = self.__hazard_func(t)
 
             # Evaluate the growth probabilities - shift the probabilities down and to
             # the right, scaled by the hazard function and the predictive
             # probabilities.
-            R[1:t+1,t+1] = R[0:t,t]* predprobs * (1-H);
+            R[1:t+1,t+1] = R[0:t,t]* predprobs * (1-H)
 
             # Evaluate the probability that there *was* a changepoint and we're
             # accumulating the mass back down at r = 0.
-            R[0,t+1] = sum((R[0:t,t] * predprobs * H).flatten() );
+            R[0,t+1] = sum((R[0:t,t] * predprobs * H).flatten() )
 
             # Renormalize the run length probabilities for improved numerical
             # stability.
-            R[:,t+1] = R[:,t+1] / sum(R[:,t+1]);
+            R[:,t+1] = R[:,t+1] / sum(R[:,t+1])
 
             # Update the parameter sets for each possible run length.
             muT0    = np.vstack([self.__mu0, (kappaT*muT + data[t]) / (kappaT+1)])
@@ -73,14 +76,37 @@ class Detector:
             alphaT = alphaT0
             betaT = betaT0
 
+            curr_run = self.__find_max_indicies(R[:,t])
+            if curr_run == maxes[t - 1] +1:
+                maxes[t] = curr_run
+                new_run = []
+            else:
+                if len(new_run) == 0:
+                    new_run.append(curr_run)
+                elif curr_run == new_run[len(new_run) - 1] + 1:
+                    new_run.append(curr_run)
+                else:
+                    new_run = []
+                    new_run.append(curr_run)
+                    
+                if len(new_run) >= self.__lag:
+                    for i in range(0,curr_run[0] + 1):
+                        maxes[t - i] = curr_run - i
+                    new_run = []
+                else:
+                    maxes[t] = maxes[t - 1] + 1
             # Store the maximum, to plot later.
-            maxes[t] = self.__find_max_indicies(R[:,t])
+            #if self.__lag == 0:
+            #   maxes[t] = self.__find_max_indicies(R[:,t])
+            #else:
+            #    maxes = self.__build_most_probable_path(R[:,t])
         return R, maxes
     
     def __studentpdf(self, x, mu, var, nu):
         # This form is taken from Kevin Murphy's lecture notes.
         c = np.exp(sp.gammaln(nu/2 + 0.5) - sp.gammaln(nu/2)) * pow((nu*np.pi*var), (-0.5))  
         return (c * pow((1 + (1/(nu*var))*pow((x-mu),2)), (-(nu+1)/2))).transpose()
+    
     
     def __find_max_indicies(self, arr):
         maximum = max(arr)
